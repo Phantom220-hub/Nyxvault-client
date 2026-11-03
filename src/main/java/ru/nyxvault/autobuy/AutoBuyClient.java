@@ -19,11 +19,13 @@ import java.util.regex.*;
 public final class AutoBuyClient implements ClientModInitializer {
     private static final Minecraft MC = Minecraft.getInstance();
     private static final Pattern NUMBER = Pattern.compile("([0-9][0-9 ,.]*)(?:\\s*(?:монет|монета|монеты|coins?|⛃))", Pattern.CASE_INSENSITIVE);
-    private static final Map<String, Double> LIMITS = new LinkedHashMap<>();
+    private static final Map<String, BuyRule> RULES = new LinkedHashMap<>();
     private static KeyMapping toggleKey;
     private static boolean enabled = false;
     private static long lastAction = 0;
     private static String lastNotice = "";
+
+    private record BuyRule(double maxPrice, boolean single) {}
 
     @Override public void onInitializeClient() {
         loadConfig();
@@ -40,14 +42,19 @@ public final class AutoBuyClient implements ClientModInitializer {
                 if (!slot.hasItem() || slot.container == client.player.getInventory()) continue;
                 ItemStack stack = slot.getItem();
                 String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-                Double max = LIMITS.get(id);
-                if (max == null) continue;
+                BuyRule rule = RULES.get(id);
+                if (rule == null) continue;
                 double price = readPrice(stack);
-                if (price > 0 && price <= max) {
+                if (price > 0 && price <= rule.maxPrice()) {
                     lastAction = System.currentTimeMillis();
+                    String mode = rule.single() ? "ПОШТУЧНО (ПКМ)" : "ЦЕЛЫЙ ЛОТ (ЛКМ)";
                     String msg = "Найдено: " + stack.getHoverName().getString() + " за " + price;
-                    if (!msg.equals(lastNotice)) { tell(msg + " — нажимаю лот"); lastNotice = msg; }
-                    client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, ClickType.PICKUP, client.player);
+                    if (!msg.equals(lastNotice)) {
+                        tell(msg + " — покупка: " + mode);
+                        lastNotice = msg;
+                    }
+                    int mouseButton = rule.single() ? 1 : 0;
+                    client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, mouseButton, ClickType.PICKUP, client.player);
                     break;
                 }
             }
@@ -72,12 +79,21 @@ public final class AutoBuyClient implements ClientModInitializer {
         try {
             Path file = MC.gameDirectory.toPath().resolve("config/nyxvault-autobuy.properties");
             Files.createDirectories(file.getParent());
-            if (!Files.exists(file)) Files.writeString(file, "# Формат: minecraft:item_id=максимальная_цена\n#minecraft:elytra=1000\nminecraft:netherite_ingot=100\n");
+            if (!Files.exists(file)) Files.writeString(file,
+                "# Формат: minecraft:item_id=максимальная_цена,режим\n" +
+                "# Режим full — весь лот (ЛКМ), single — поштучно (ПКМ)\n" +
+                "minecraft:netherite_ingot=100,full\n" +
+                "# minecraft:elytra=1000,full\n" +
+                "# minecraft:potion=500,single\n");
             Properties p = new Properties();
             try (var in = Files.newInputStream(file)) { p.load(in); }
             for (String key : p.stringPropertyNames()) {
-                try { LIMITS.put(key.trim(), Double.parseDouble(p.getProperty(key).trim())); }
-                catch (NumberFormatException ignored) { }
+                try {
+                    String[] parts = p.getProperty(key).trim().split(",", 2);
+                    double maxPrice = Double.parseDouble(parts[0].trim());
+                    boolean single = parts.length > 1 && parts[1].trim().equalsIgnoreCase("single");
+                    RULES.put(key.trim(), new BuyRule(maxPrice, single));
+                } catch (RuntimeException ignored) { }
             }
         } catch (Exception e) { System.err.println("[NYXVAULT] Не удалось прочитать конфиг: " + e); }
     }

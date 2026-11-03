@@ -145,7 +145,9 @@ public final class AutoBuyClient implements ClientModInitializer {
             } catch (NumberFormatException e) { tell("Введи корректную цену."); }
         }
         @Override public void render(GuiGraphics g, int mx, int my, float delta) {
-            renderBackground(g, mx, my, delta);
+            // Avoid the vanilla blur pipeline: FCL can invoke it more than once per frame.
+            // A simple dim overlay keeps the settings GUI readable without triggering the blur crash.
+            g.fill(0, 0, width, height, 0xC0101420);
             g.drawCenteredString(font, "NYXVAULT AUTO BUY", width / 2, 15, 0x55FFFF);
             g.drawCenteredString(font, "J — GUI | K — запуск/остановка", width / 2, 30, 0xFFFFFF);
             g.drawString(font, "СПИСОК ПРЕДМЕТОВ (" + RULES.size() + ")", width / 2 - 145, 67, 0xAAAAAA);

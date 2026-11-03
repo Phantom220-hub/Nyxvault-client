@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "nyxvault_autobuy",
+  "version": "${version}",
+  "name": "NYXVAULT AutoBuy",
+  "description": "Configurable auction listing scanner and click assistant for Minecraft 1.21.11.",
+  "authors": ["NYXVAULT"],
+  "environment": "client",
+  "entrypoints": { "client": ["ru.nyxvault.autobuy.AutoBuyClient"] },
+  "depends": { "fabricloader": ">=0.19.3", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" }
+}
